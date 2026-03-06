@@ -1,9 +1,10 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WebServer.h>
+#include "secrets.h"
 
-const char* ssid     = "Pleuh";
-const char* password = "165116748221354";
+const char* ssid     = WIFI_SSID;
+const char* password = WIFI_PASSWORD;
 
 WebServer server(80);
 
