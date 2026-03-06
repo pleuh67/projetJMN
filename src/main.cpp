@@ -42,20 +42,20 @@ const char* htmlPage = R"rawliteral(
       background: #1a1a2e;
       color: #eee;
     }
-    h1 { margin-bottom: 30px; }
+    h1 { margin-bottom: 25px; }
     .led-indicator {
-      width: 80px;
-      height: 80px;
+      width: 68px;
+      height: 68px;
       border-radius: 50%;
-      margin-bottom: 20px;
+      margin-bottom: 17px;
       transition: background 0.3s;
     }
     .led-on  { background: #ffdd57; box-shadow: 0 0 30px #ffdd57; }
     .led-off { background: #444; box-shadow: none; }
     .btn {
-      padding: 14px 36px;
-      margin: 8px;
-      font-size: 1.1rem;
+      padding: 12px 30px;
+      margin: 6px;
+      font-size: 1rem;
       border: none;
       border-radius: 8px;
       cursor: pointer;
@@ -64,24 +64,24 @@ const char* htmlPage = R"rawliteral(
     .btn:hover { opacity: 0.85; }
     .btn-on  { background: #ffdd57; color: #333; }
     .btn-off { background: #e74c3c; color: #fff; }
-    h2 { margin: 30px 0 16px; font-size: 1rem; color: #aaa; letter-spacing: 1px; text-transform: uppercase; }
+    h2 { margin: 25px 0 13px; font-size: 1rem; color: #aaa; letter-spacing: 1px; text-transform: uppercase; }
     .sensors {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 14px;
+      gap: 12px;
       width: 100%;
       max-width: 380px;
     }
     .card {
       background: #16213e;
       border-radius: 12px;
-      padding: 18px 12px;
+      padding: 15px 12px;
       text-align: center;
     }
-    .card .label { font-size: 0.8rem; color: #888; margin-bottom: 6px; }
-    .card .value { font-size: 1.8rem; font-weight: bold; color: #ffdd57; }
+    .card .label { font-size: 0.8rem; color: #888; margin-bottom: 4px; }
+    .card .value { font-size: 1.55rem; font-weight: bold; color: #ffdd57; }
     .card .unit  { font-size: 0.85rem; color: #888; margin-top: 2px; }
-    .update-time { margin-top: 14px; font-size: 0.75rem; color: #555; }
+    .update-time { margin-top: 12px; font-size: 0.75rem; color: #555; }
   </style>
 </head>
 <body>
