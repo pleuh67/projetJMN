@@ -1,41 +1,134 @@
 #include <Arduino.h>
+#include <WiFi.h>
+#include <WebServer.h>
 
+const char* ssid     = "Pleuh";
+const char* password = "165116748221354";
 
-/*
-  Blink
+WebServer server(80);
 
-  Turns an LED on for one second, then off for one second, repeatedly.
+bool ledState = false;
 
-  Most Arduinos have an on-board LED you can control. On the UNO, MEGA and ZERO
-  it is attached to digital pin 13, on MKR1000 on pin 6. LED_BUILTIN is set to
-  the correct LED pin independent of which board is used.
-  If you want to know what pin the on-board LED is connected to on your Arduino
-  model, check the Technical Specs of your board at:
-  https://docs.arduino.cc/hardware/
+const char* htmlPage = R"rawliteral(
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Controle LED</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      background: #1a1a2e;
+      color: #eee;
+    }
+    h1 { margin-bottom: 30px; }
+    .led-indicator {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      margin-bottom: 30px;
+      transition: background 0.3s;
+    }
+    .led-on  { background: #ffdd57; box-shadow: 0 0 30px #ffdd57; }
+    .led-off { background: #444; box-shadow: none; }
+    .btn {
+      padding: 15px 40px;
+      margin: 10px;
+      font-size: 1.2rem;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-on  { background: #ffdd57; color: #333; }
+    .btn-off { background: #e74c3c; color: #fff; }
+  </style>
+</head>
+<body>
+  <h1>Controle LED</h1>
+  <div class="led-indicator %LEDCLASS%"></div>
+  <p>Etat : <strong>%LEDSTATE%</strong></p>
+  <a href="/on"><button class="btn btn-on">Allumer</button></a>
+  <a href="/off"><button class="btn btn-off">Eteindre</button></a>
+</body>
+</html>
+)rawliteral";
 
-  modified 8 May 2014
-  by Scott Fitzgerald
-  modified 2 Sep 2016
-  by Arturo Guadalupi
-  modified 8 Sep 2016
-  by Colby Newman
+String buildPage()
+{
+  String page = htmlPage;
+  if (ledState)
+  {
+    page.replace("%LEDCLASS%", "led-on");
+    page.replace("%LEDSTATE%", "Allumee");
+  }
+  else
+  {
+    page.replace("%LEDCLASS%", "led-off");
+    page.replace("%LEDSTATE%", "Eteinte");
+  }
+  return page;
+}
 
-  This example code is in the public domain.
+void handleRoot()
+{
+  server.send(200, "text/html", buildPage());
+}
 
-  https://docs.arduino.cc/built-in-examples/basics/Blink/
-*/
+void handleOn()
+{
+  ledState = true;
+  digitalWrite(LED_BUILTIN, LOW);
+  server.sendHeader("Location", "/");
+  server.send(303);
+}
 
-// the setup function runs once when you press reset or power the board
-void setup() {
-  // initialize digital pin LED_BUILTIN as an output.
+void handleOff()
+{
+  ledState = false;
+  digitalWrite(LED_BUILTIN, HIGH);
+  server.sendHeader("Location", "/");
+  server.send(303);
+}
+
+void setup()
+{
+  Serial.begin(115200);
   pinMode(LED_BUILTIN, OUTPUT);
+  while (!Serial)
+  {
+    digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+    delay(500);
+  }
+  digitalWrite(LED_BUILTIN, LOW);
+
+  WiFi.begin(ssid, password);
+  Serial.print("Connexion WiFi");
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println();
+  Serial.print("Connecte ! IP : ");
+  Serial.println(WiFi.localIP());
+
+  server.on("/",    handleRoot);
+  server.on("/on",  handleOn);
+  server.on("/off", handleOff);
+  server.begin();
+  Serial.println("Serveur HTTP demarre");
 }
 
-// the loop function runs over and over again forever
-void loop() {
-  digitalWrite(LED_BUILTIN, HIGH);  // change state of the LED by setting the pin to the HIGH voltage level
-  delay(5000);                      // wait for a second
-  digitalWrite(LED_BUILTIN, LOW);   // change state of the LED by setting the pin to the LOW voltage level
-  delay(1000);                      // wait for a second
+void loop()
+{
+  server.handleClient();
 }
-
