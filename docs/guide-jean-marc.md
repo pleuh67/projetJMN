@@ -105,6 +105,43 @@ Si un capteur n'est pas détecté, sa valeur sera `null`.
 
 ---
 
+## Endpoint JSON (état LED)
+
+L'URL `/state` retourne l'état actuel de la LED :
+
+```
+GET http://<adresse-ip>/state
+```
+
+Exemple de réponse :
+```json
+{ "led": true }
+```
+
+---
+
+## Architecture des fichiers web (SPIFFS)
+
+Les fichiers de l'interface sont stockés dans la **mémoire flash SPIFFS** de la carte, dans le dossier `data/` du projet :
+
+| Fichier | Rôle |
+|---------|------|
+| `data/index.html` | Page principale de l'interface |
+| `data/w3.min.css` | Framework CSS W3.CSS 4.15 (mise en forme) |
+| `data/style.css` | Thème sombre personnalisé (overrides) |
+| `data/app.js` | Logique JavaScript (LED + capteurs) |
+
+> Les chemins CSS utilisent `./` (relatif) ce qui permet aussi d'ouvrir `index.html` directement depuis le disque pour prévisualiser la mise en forme, sans avoir besoin de la carte.
+
+### Procédure de mise à jour du firmware
+
+Si les fichiers web sont modifiés, **deux flashages** sont nécessaires dans PlatformIO, dans cet ordre :
+
+1. **Upload Filesystem Image** → charge `data/` dans SPIFFS
+2. **Upload** → charge le firmware (`main.cpp`)
+
+---
+
 ## Bibliothèques utilisées
 
 | Bibliothèque | Auteur | Rôle |
@@ -112,6 +149,8 @@ Si un capteur n'est pas détecté, sa valeur sera `null`.
 | `Adafruit BME280 Library` | Adafruit | Lecture température / humidité / pression |
 | `BH1750` | claws | Lecture luminosité |
 | `WebServer` | Espressif (Arduino) | Serveur HTTP intégré |
+| `SPIFFS` | Espressif (Arduino) | Système de fichiers flash |
+| `W3.CSS 4.15` | Jan Egil & Borge Refsnes | Framework CSS de mise en forme |
 
 ---
 

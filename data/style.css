@@ -1,0 +1,16 @@
+/* Theme sombre + overrides pour Station JMN */
+body { background: #1a1a2e; }
+
+.sensor-card  { background: #16213e !important; text-align: center; }
+.sensor-value { color: #ffdd57 !important; font-weight: bold; }
+.sensor-grid  { max-width: 420px; margin: auto; }
+.section-title { letter-spacing: 2px; text-transform: uppercase; margin-top: 28px; }
+
+.led-indicator {
+  width: 68px;
+  height: 68px;
+  margin: 0 auto 16px;
+  transition: background 0.3s, box-shadow 0.3s;
+}
+.led-on  { background: #ffdd57; box-shadow: 0 0 30px #ffdd57; }
+.led-off { background: #444;    box-shadow: none; }
