@@ -3,13 +3,15 @@ body { background: #1a1a2e; }
 
 .sensor-card  { background: #16213e !important; text-align: center; }
 .sensor-value { color: #ffdd57 !important; font-weight: bold; }
-.sensor-grid  { max-width: 420px; margin: auto; }
-.section-title { letter-spacing: 2px; text-transform: uppercase; margin-top: 28px; }
+.sensor-grid  { max-width: 360px; margin: auto; }
+.sensor-i2c   { width: 45%; float: left; padding: 0 4px; box-sizing: border-box; }
+.section-title { letter-spacing: 2px; text-transform: uppercase; margin-top: 28px; color: #aaa !important; }
+.sensor-card .w3-text-grey { color: #bbb !important; }
 
 .led-indicator {
-  width: 68px;
-  height: 68px;
-  margin: 0 auto 16px;
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 8px;
   transition: background 0.3s, box-shadow 0.3s;
 }
 .led-on  { background: #ffdd57; box-shadow: 0 0 30px #ffdd57; }
