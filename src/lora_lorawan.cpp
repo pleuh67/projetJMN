@@ -61,6 +61,20 @@ static void noncesSave()
   Serial.printf("[LoRa] Nonces sauvegardes en NVS — DevNonce : %u (0x%04X)\n", devNonce, devNonce);
 }
 
+// Garantit que le DevNonce dans le buffer RadioLib est >= minVal.
+// À appeler après noncesLoad() si le réseau a déjà vu des DevNonces élevés.
+static void noncesEnsureMin(uint16_t minVal)
+{
+  uint8_t* nb = node.getBufferNonces();  // sérialise l'état interne → retourne pointeur
+  uint16_t cur = ((uint16_t)nb[2] << 8) | nb[3];
+  if (cur < minVal) {
+    nb[2] = (minVal >> 8) & 0xFF;
+    nb[3] =  minVal       & 0xFF;
+    node.setBufferNonces(nb);  // ré-injecte le buffer patché
+    Serial.printf("[LoRa] DevNonce ajuste : %u → %u\n", cur, minVal);
+  }
+}
+
 // ── Cayenne LPP — encodage manuel ────────────────────────────────────────────
 static uint8_t _buf[64];
 static uint8_t _len;
@@ -223,7 +237,8 @@ void loraInit()
   Serial.println();
 
   node.beginOTAA(joinEUI, devEUI, appKey, appKey);  // LoRaWAN 1.0.x : nwkKey = appKey
-  noncesLoad();  // restaure DevNonce persisté (évite rejet Orange)
+  noncesLoad();             // restaure DevNonce persisté (évite rejet Orange)
+  noncesEnsureMin(12);      // Orange a vu jusqu'à 0x000C — garder au-dessus
 
   { char ts[20] = "--:--:--"; struct tm ti;
     if (getLocalTime(&ti, 0)) strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", &ti);
