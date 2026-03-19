@@ -18,9 +18,10 @@
 static SX1262      radio = new Module(LORA_NSS, LORA_DIO1, LORA_NRST, LORA_BUSY, SPI);
 static LoRaWANNode node(&radio, &EU868);
 
-static bool          _joined      = false;
-static unsigned long _lastAlertMs = 0;
-static uint16_t      _sendCount   = 0;  // compteur total envois (succès + échecs)
+static bool          _joined       = false;
+static unsigned long _lastAlertMs  = 0;
+static uint16_t      _sendCount    = 0;  // compteur total envois (succès + échecs)
+static uint8_t       _failCount    = 0;  // échecs consécutifs (reset si succès)
 static Preferences   _prefs;
 
 // ── Persistance session LoRaWAN (NVS) ────────────────────────────────────────
@@ -57,6 +58,17 @@ static bool sessionRestore()
   }
   _prefs.end();
   return ok;
+}
+
+static void sessionClear()
+{
+  _prefs.begin("lorawan", false);
+  _prefs.remove("nonces");
+  _prefs.remove("session");
+  _prefs.end();
+  _joined    = false;
+  _failCount = 0;
+  Serial.println("[LoRa] Session NVS effacee — re-join requis");
 }
 
 // ── Cayenne LPP — encodage manuel ────────────────────────────────────────────
@@ -149,11 +161,19 @@ static bool transmit()
   Serial.printf("[LoRa] Transmission %d octets Cayenne LPP (envoi #%u)...\n", _len, _sendCount);
   int16_t state = node.sendReceive(_buf, _len);
   bool ok = (state == RADIOLIB_ERR_NONE || state == RADIOLIB_LORAWAN_NO_DOWNLINK);
-  if (ok)
+  if (ok) {
+    _failCount = 0;
     Serial.printf("[LoRa] Trame envoyee%s\n",
                   state == RADIOLIB_LORAWAN_NO_DOWNLINK ? " (pas de downlink)" : " + downlink recu");
-  else
-    Serial.printf("[LoRa] Erreur envoi : %d\n", state);
+  } else {
+    _failCount++;
+    Serial.printf("[LoRa] Erreur envoi : %d (%u/%u echecs consecutifs)\n",
+                  state, _failCount, LORA_MAX_SEND_FAILURES);
+    if (_failCount >= LORA_MAX_SEND_FAILURES) {
+      Serial.println("[LoRa] Seuil echecs atteint — session invalidee, re-join au prochain cycle");
+      sessionClear();
+    }
+  }
   return ok;
 }
 

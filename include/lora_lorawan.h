@@ -18,8 +18,9 @@
 #define LORA_SPI_MOSI   9
 
 // ── Paramètres réseau ─────────────────────────────────────────────────────────
-#define LORA_SEND_INTERVAL_MS   (15UL * 60UL * 1000UL)  // envoi périodique : 15 min
-#define LORA_ALERT_COOLDOWN_MS  (5UL * 60UL * 1000UL)   // anti-spam alertes : 5 min
+#define LORA_SEND_INTERVAL_MS   (5UL * 60UL * 1000UL)  // envoi périodique : 5 min
+#define LORA_ALERT_COOLDOWN_MS  (5UL * 60UL * 1000UL)  // anti-spam alertes : 5 min
+#define LORA_MAX_SEND_FAILURES  3                       // échecs consécutifs → re-join
 
 // ── Pin ADC tension batterie ──────────────────────────────────────────────────
 // Brancher un pont diviseur (ex. 100k/100k) entre VBAT et GND,
