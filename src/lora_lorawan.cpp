@@ -3,6 +3,7 @@
 #include <RadioLib.h>
 #include <SPI.h>
 #include <esp_mac.h>
+#include <Preferences.h>
 
 #ifdef USE_HX711
   #include <HX711.h>
@@ -20,6 +21,35 @@ static LoRaWANNode node(&radio, &EU868);
 static bool          _joined      = false;
 static unsigned long _lastAlertMs = 0;
 static uint16_t      _sendCount   = 0;  // compteur total envois (succès + échecs)
+static Preferences   _prefs;
+
+// ── Persistance DevNonce (NVS) ────────────────────────────────────────────────
+// Flash ESP32 : 100 000 cycles/secteur, NVS wear-leveling sur 24 KB (6 secteurs)
+// → ~750 000 écritures effectives. À 1 écriture/join (15 min) : ~21 ans.
+
+static void noncesLoad()
+{
+  _prefs.begin("lorawan", true);  // lecture seule
+  size_t len = _prefs.getBytesLength("nonces");
+  if (len == RADIOLIB_LORAWAN_NONCES_BUF_SIZE) {
+    uint8_t buf[RADIOLIB_LORAWAN_NONCES_BUF_SIZE];
+    _prefs.getBytes("nonces", buf, len);
+    node.setBufferNonces(buf);
+    Serial.println("[LoRa] Nonces restaures depuis NVS");
+  } else {
+    Serial.println("[LoRa] Pas de nonces en NVS (premier demarrage)");
+  }
+  _prefs.end();
+}
+
+static void noncesSave()
+{
+  uint8_t* buf = node.getBufferNonces();
+  _prefs.begin("lorawan", false);
+  _prefs.putBytes("nonces", buf, RADIOLIB_LORAWAN_NONCES_BUF_SIZE);
+  _prefs.end();
+  Serial.println("[LoRa] Nonces sauvegardes en NVS");
+}
 
 // ── Cayenne LPP — encodage manuel ────────────────────────────────────────────
 static uint8_t _buf[64];
@@ -183,11 +213,13 @@ void loraInit()
   Serial.println();
 
   node.beginOTAA(joinEUI, devEUI, appKey, appKey);  // LoRaWAN 1.0.x : nwkKey = appKey
+  noncesLoad();  // restaure DevNonce persisté (évite rejet Orange)
 
   { char ts[20] = "--:--:--"; struct tm ti;
     if (getLocalTime(&ti, 0)) strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", &ti);
     Serial.printf("[%s] LoRaWAN OTAA join Orange Live Objects... ", ts); }
   state = node.activateOTAA();
+  noncesSave();  // sauvegarde DevNonce incrémenté (succès ou échec)
   if (state != RADIOLIB_LORAWAN_NEW_SESSION) {
     Serial.printf("join echoue : %d\n", state);
     return;
@@ -222,6 +254,7 @@ bool loraRetryJoin()
     if (getLocalTime(&ti, 0)) strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", &ti);
     Serial.printf("[%s] [LoRa] Retry join OTAA... ", ts); }
   int16_t state = node.activateOTAA();
+  noncesSave();  // sauvegarde DevNonce incrémenté (succès ou échec)
   if (state != RADIOLIB_LORAWAN_NEW_SESSION) {
     Serial.printf("echec : %d\n", state);
     return false;
