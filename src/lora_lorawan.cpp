@@ -34,9 +34,12 @@ static void noncesLoad()
   if (len == RADIOLIB_LORAWAN_NONCES_BUF_SIZE) {
     uint8_t buf[RADIOLIB_LORAWAN_NONCES_BUF_SIZE];
     _prefs.getBytes("nonces", buf, len);
-    // DevNonce : octets [2-3] big-endian dans le buffer RadioLib
-    uint16_t devNonce = ((uint16_t)buf[2] << 8) | buf[3];
-    Serial.printf("[LoRa] Nonces NVS restaures — DevNonce : %u\n", devNonce);
+    Serial.print("[LoRa] Buffer NVS : ");
+    for (int i = 0; i < (int)RADIOLIB_LORAWAN_NONCES_BUF_SIZE; i++)
+      Serial.printf("%02X ", buf[i]);
+    Serial.println();
+    uint16_t devNonce = ((uint16_t)buf[2] << 8) | buf[3];  // big-endian RadioLib
+    Serial.printf("[LoRa] Nonces NVS restaures — DevNonce : %u (0x%04X)\n", devNonce, devNonce);
     node.setBufferNonces(buf);
   } else {
     Serial.println("[LoRa] Pas de nonces en NVS (premier demarrage) — DevNonce : 0");
@@ -47,10 +50,15 @@ static void noncesLoad()
 static void noncesSave()
 {
   uint8_t* buf = node.getBufferNonces();
+  Serial.print("[LoRa] Buffer sauvegarde : ");
+  for (int i = 0; i < (int)RADIOLIB_LORAWAN_NONCES_BUF_SIZE; i++)
+    Serial.printf("%02X ", buf[i]);
+  Serial.println();
+  uint16_t devNonce = ((uint16_t)buf[2] << 8) | buf[3];
   _prefs.begin("lorawan", false);
   _prefs.putBytes("nonces", buf, RADIOLIB_LORAWAN_NONCES_BUF_SIZE);
   _prefs.end();
-  Serial.println("[LoRa] Nonces sauvegardes en NVS");
+  Serial.printf("[LoRa] Nonces sauvegardes en NVS — DevNonce : %u (0x%04X)\n", devNonce, devNonce);
 }
 
 // ── Cayenne LPP — encodage manuel ────────────────────────────────────────────
