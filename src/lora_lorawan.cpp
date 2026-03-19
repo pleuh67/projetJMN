@@ -173,6 +173,15 @@ void loraInit()
 
   uint64_t joinEUI = LORAWAN_JOIN_EUI;
 
+  Serial.printf("JoinEUI : %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X\n",
+                (uint8_t)(joinEUI >> 56), (uint8_t)(joinEUI >> 48),
+                (uint8_t)(joinEUI >> 40), (uint8_t)(joinEUI >> 32),
+                (uint8_t)(joinEUI >> 24), (uint8_t)(joinEUI >> 16),
+                (uint8_t)(joinEUI >>  8), (uint8_t)(joinEUI));
+  Serial.print("AppKey  : ");
+  for (int i = 0; i < 16; i++) Serial.printf("%02X", appKey[i]);
+  Serial.println();
+
   node.beginOTAA(joinEUI, devEUI, appKey, appKey);  // LoRaWAN 1.0.x : nwkKey = appKey
 
   Serial.print("LoRaWAN OTAA join Orange Live Objects... ");

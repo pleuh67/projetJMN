@@ -261,12 +261,17 @@ void setup()
 
   configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org");
   struct tm timeinfo;
-  if (rtcOk && getLocalTime(&timeinfo, 10000)) {
-    rtc.adjust(DateTime(timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
-                        timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec));
-    Serial.println("RTC synchronisee avec NTP");
+  if (getLocalTime(&timeinfo, 10000)) {
+    char buf[32];
+    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &timeinfo);
+    Serial.printf("NTP synchronise : %s\n", buf);
+    if (rtcOk) {
+      rtc.adjust(DateTime(timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+                          timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec));
+      Serial.println("RTC mise a jour depuis NTP");
+    }
   } else {
-    Serial.println("Sync NTP echouee ou RTC absente");
+    Serial.println("Sync NTP echouee");
   }
 
   smsInit();
@@ -333,8 +338,11 @@ void loop()
     } else {
       float temp, hum, pres, lux, db;
       getSensorValues(temp, hum, pres, lux, db);
-      Serial.printf("[LoRa] Envoi — T:%.1f°C H:%.1f%% P:%.0fhPa L:%.0flux dB:%.1f\n",
-                    temp, hum, pres, lux, db);
+      char ts[20] = "--:--:--";
+      struct tm tinfo;
+      if (getLocalTime(&tinfo, 0)) strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", &tinfo);
+      Serial.printf("[LoRa] %s — T:%.1f°C H:%.1f%% P:%.0fhPa L:%.0flux dB:%.1f\n",
+                    ts, temp, hum, pres, lux, db);
       bool ok = loraSend(temp, hum, pres, lux, -1.0f, -1.0f, db, false);
       Serial.printf("[LoRa] Resultat : %s\n", ok ? "OK" : "ECHEC");
     }
