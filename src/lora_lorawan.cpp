@@ -34,10 +34,12 @@ static void noncesLoad()
   if (len == RADIOLIB_LORAWAN_NONCES_BUF_SIZE) {
     uint8_t buf[RADIOLIB_LORAWAN_NONCES_BUF_SIZE];
     _prefs.getBytes("nonces", buf, len);
+    // DevNonce : octets [2-3] big-endian dans le buffer RadioLib
+    uint16_t devNonce = ((uint16_t)buf[2] << 8) | buf[3];
+    Serial.printf("[LoRa] Nonces NVS restaures — DevNonce : %u\n", devNonce);
     node.setBufferNonces(buf);
-    Serial.println("[LoRa] Nonces restaures depuis NVS");
   } else {
-    Serial.println("[LoRa] Pas de nonces en NVS (premier demarrage)");
+    Serial.println("[LoRa] Pas de nonces en NVS (premier demarrage) — DevNonce : 0");
   }
   _prefs.end();
 }
