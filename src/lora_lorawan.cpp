@@ -184,7 +184,9 @@ void loraInit()
 
   node.beginOTAA(joinEUI, devEUI, appKey, appKey);  // LoRaWAN 1.0.x : nwkKey = appKey
 
-  Serial.print("LoRaWAN OTAA join Orange Live Objects... ");
+  { char ts[20] = "--:--:--"; struct tm ti;
+    if (getLocalTime(&ti, 0)) strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", &ti);
+    Serial.printf("[%s] LoRaWAN OTAA join Orange Live Objects... ", ts); }
   state = node.activateOTAA();
   if (state != RADIOLIB_LORAWAN_NEW_SESSION) {
     Serial.printf("join echoue : %d\n", state);
@@ -216,7 +218,9 @@ bool loraJoined() { return _joined; }
 bool loraRetryJoin()
 {
   if (_joined) return true;
-  Serial.print("[LoRa] Retry join OTAA... ");
+  { char ts[20] = "--:--:--"; struct tm ti;
+    if (getLocalTime(&ti, 0)) strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", &ti);
+    Serial.printf("[%s] [LoRa] Retry join OTAA... ", ts); }
   int16_t state = node.activateOTAA();
   if (state != RADIOLIB_LORAWAN_NEW_SESSION) {
     Serial.printf("echec : %d\n", state);
