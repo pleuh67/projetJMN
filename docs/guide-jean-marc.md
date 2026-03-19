@@ -6,21 +6,28 @@ La carte **XIAO ESP32S3** héberge un petit serveur web accessible depuis n'impo
 Elle permet de :
 
 - **Allumer / éteindre** la LED intégrée
-- **Consulter en temps réel** la température, l'humidité, la pression atmosphérique, la luminosité et le niveau sonore
+- **Consulter en temps réel** la température, l'humidité, la pression atmosphérique et la luminosité
 - **Recevoir une alerte SMS** lorsqu'un seuil est dépassé
+- **Transmettre les mesures par LoRa** vers le réseau Orange, toutes les 5 minutes
 
 ---
 
 ## Matériel connecté
 
-| Capteur  | Ce qu'il mesure                               | Protocole |
-|----------|-----------------------------------------------|-----------|
-| BME280   | Température (°C), Humidité (%), Pression (hPa) | I2C       |
-| BH1750   | Luminosité (lux)                              | I2C       |
-| INMP441  | Niveau sonore (dB SPL approx.)                | I2S       |
-| DS3231   | Horloge temps réel (date et heure)            | I2C       |
+| Capteur | Ce qu'il mesure | Protocole |
+|---------|-----------------|-----------|
+| BME280 | Température (°C), Humidité (%), Pression (hPa) | I2C |
+| BH1750 | Luminosité (lux) | I2C |
+| DS3231 | Horloge temps réel (date et heure) | I2C |
+| Wio-SX1262 | Module LoRa (émission vers réseau Orange) | SPI |
 
-### Câblage I2C (XIAO ESP32S3)
+> **Capteurs en préparation** (seront activés sur la prochaine carte) :
+> - Microphone INMP441 — niveau sonore en dB
+> - Cellule de charge HX711 — poids en kg
+
+---
+
+## Câblage I2C (XIAO ESP32S3)
 
 ```
 XIAO ESP32S3        BME280 / BH1750 / DS3231
@@ -35,20 +42,8 @@ GPIO 6 (SCL)   →    SCL
 
 **Adresses I2C :**
 - BME280 : `0x76` (SDO → GND) ou `0x77` (SDO → 3.3V)
-- BH1750 : `0x23` (ADDR → GND) ou `0x5C` (ADDR → 3.3V)
+- BH1750 : `0x23` (ADDR → GND)
 - DS3231 : `0x68` (fixe)
-
-### Câblage INMP441 (microphone I2S)
-
-```
-XIAO ESP32S3        INMP441
-────────────        ───────
-3.3V           →    VDD
-GND            →    GND + L/R
-GPIO 7 (D8)    →    SCK / BCLK
-GPIO 8 (D9)    →    WS / LRCLK
-GPIO 9 (D10)   →    SD / DATA
-```
 
 ---
 
@@ -81,13 +76,39 @@ L'interface se met à jour **automatiquement toutes les 5 secondes** sans rechar
 │  ├──────────┼────────────┤  │
 │  │ 1013 hPa │  320 lux   │  │
 │  │ Pression │ Luminosité │  │
-│  ├──────────┴────────────┤  │
-│  │      68.3 dB          │  │
-│  │  Niveau sonore        │  │
-│  └───────────────────────┘  │
+│  └──────────┴────────────┘  │
 │  Mis à jour : 14:32:01      │
 └─────────────────────────────┘
 ```
+
+---
+
+## Transmission LoRa (Orange Live Objects)
+
+La carte envoie automatiquement les mesures **toutes les 15 minutes** via le réseau LoRa Orange.
+Les données sont visibles dans l'interface Orange Live Objects.
+
+### Paramètres de déclaration du device (Orange Live Objects)
+
+| Paramètre | Valeur |
+|-----------|--------|
+| DevEUI | `744DBDFFFE995780` |
+| Profil | `Generic_classA_RX2SF12` |
+| Classe | Class A |
+| Activation | OTAA |
+| Plan de fréquences | EU868 |
+| AppKey | *voir `secrets.h`* |
+| JoinEUI | *voir `secrets.h`* |
+
+Chaque trame contient :
+- Température, humidité, pression atmosphérique
+- Luminosité
+- Tension batterie *(si câblée)*
+- Poids *(quand le capteur sera connecté)*
+- Niveau sonore *(quand le microphone sera connecté)*
+- Un flag d'alerte (0 = normal, 1 = alerte)
+
+En cas d'alerte (niveau sonore dépassé), une trame avec le flag alerte=1 est envoyée **immédiatement**, en plus de l'envoi périodique.
 
 ---
 
@@ -114,9 +135,11 @@ Exemple de réponse :
   "humidity": 58.20,
   "pressure": 1013.25,
   "lux": 320.0,
-  "sound_db": 68.3
+  "sound_db": null
 }
 ```
+
+> `null` signifie que le capteur correspondant n'est pas connecté ou pas activé.
 
 ### État LED
 
@@ -137,10 +160,8 @@ GET http://<adresse-ip>/time
 
 Exemple de réponse :
 ```json
-{ "datetime": "2026-03-12 14:32:01" }
+{ "datetime": "2026-03-18 14:32:01" }
 ```
-
-Si un capteur n'est pas détecté, sa valeur sera `null`.
 
 ---
 
@@ -148,12 +169,13 @@ Si un capteur n'est pas détecté, sa valeur sera `null`.
 
 | Symptôme | Cause probable | Solution |
 |----------|---------------|----------|
-| Valeurs `--` sur tous les capteurs | Capteur non détecté | Vérifier le câblage SDA/SCL et l'alimentation |
+| Valeurs `--` sur les capteurs | Capteur non détecté | Vérifier le câblage SDA/SCL et l'alimentation |
 | Impossible d'accéder à l'IP | Wi-Fi non connecté | Vérifier SSID/mot de passe dans `secrets.h`, surveiller le moniteur série |
 | LED ne réagit pas | Logique inversée | La LED intégrée est active-bas (LOW = allumée) |
-| BME280 non détecté | Mauvaise adresse I2C | Essayer de relier SDO à 3.3V pour passer en adresse `0x77` |
+| BME280 non détecté | Mauvaise adresse I2C | Relier SDO à 3.3V pour passer en adresse `0x77` |
 | SMS non reçu | Anti-spam actif | Attendre 5 min entre deux envois ; vérifier les logs `[SMS]` dans le moniteur série |
-| `sound_db: null` | INMP441 non initialisé | Vérifier le câblage I2S (GPIO 7/8/9) |
+| LoRa : join échoué | Credentials LoRaWAN incorrects | Vérifier `LORAWAN_JOIN_EUI`, `LORAWAN_DEV_EUI`, `LORAWAN_APP_KEY` dans `secrets.h` |
+| LoRa : trame non reçue | Couverture réseau | Vérifier la couverture Orange LoRa sur le site, ou rapprocher d'une fenêtre |
 
 ---
 
@@ -165,7 +187,7 @@ Les fichiers de l'interface sont stockés dans la **mémoire flash SPIFFS** de l
 |---------|------|
 | `data/index.html` | Page principale de l'interface |
 | `data/w3.min.css` | Framework CSS W3.CSS 4.15 (mise en forme) |
-| `data/style.css` | Thème sombre personnalisé (overrides) |
+| `data/style.css` | Thème sombre personnalisé |
 | `data/app.js` | Logique JavaScript (LED + capteurs) |
 
 > Les chemins CSS utilisent `./` (relatif) ce qui permet aussi d'ouvrir `index.html` directement depuis le disque pour prévisualiser la mise en forme, sans avoir besoin de la carte.
@@ -183,14 +205,15 @@ Si les fichiers web sont modifiés, **deux flashages** sont nécessaires dans Pl
 
 | Bibliothèque | Auteur | Rôle |
 |---|---|---|
-| `Adafruit BME280 Library` | Adafruit | Lecture température / humidité / pression |
-| `BH1750` | claws | Lecture luminosité |
-| `RTClib` | Adafruit | Horloge temps réel DS3231 |
-| `WebServer` | Espressif (Arduino) | Serveur HTTP intégré |
-| `SPIFFS` | Espressif (Arduino) | Système de fichiers flash |
-| `HTTPClient` + `WiFiClientSecure` | Espressif (Arduino) | Envoi SMS via API OVH (HTTPS) |
-| `W3.CSS 4.15` | Jan Egil & Borge Refsnes | Framework CSS de mise en forme |
+| Adafruit BME280 Library | Adafruit | Lecture température / humidité / pression |
+| BH1750 | claws | Lecture luminosité |
+| RTClib | Adafruit | Horloge temps réel DS3231 |
+| RadioLib | jgromes | Module LoRa SX1262 / LoRaWAN |
+| WebServer | Espressif (Arduino) | Serveur HTTP intégré |
+| SPIFFS | Espressif (Arduino) | Système de fichiers flash |
+| HTTPClient + WiFiClientSecure | Espressif (Arduino) | Envoi SMS via API OVH (HTTPS) |
+| W3.CSS 4.15 | Jan Egil & Borge Refsnes | Framework CSS de mise en forme |
 
 ---
 
-*Projet ProjetJMN — XIAO ESP32S3*
+*Projet ProjetJMN — XIAO ESP32S3 — mis à jour le 19 mars 2026*
