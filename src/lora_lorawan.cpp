@@ -23,56 +23,40 @@ static unsigned long _lastAlertMs = 0;
 static uint16_t      _sendCount   = 0;  // compteur total envois (succès + échecs)
 static Preferences   _prefs;
 
-// ── Persistance DevNonce (NVS) ────────────────────────────────────────────────
-// Flash ESP32 : 100 000 cycles/secteur, NVS wear-leveling sur 24 KB (6 secteurs)
-// → ~750 000 écritures effectives. À 1 écriture/join (15 min) : ~21 ans.
+// ── Persistance session LoRaWAN (NVS) ────────────────────────────────────────
+// Sauvegarde session + nonces après un join réussi.
+// Au prochain boot, activateOTAA() restaure la session sans nouveau JoinRequest
+// → plus de problème de DevNonce, join instantané.
 
-static void noncesLoad()
+static void sessionSave()
 {
-  _prefs.begin("lorawan", true);  // lecture seule
-  size_t len = _prefs.getBytesLength("nonces");
-  if (len == RADIOLIB_LORAWAN_NONCES_BUF_SIZE) {
-    uint8_t buf[RADIOLIB_LORAWAN_NONCES_BUF_SIZE];
-    _prefs.getBytes("nonces", buf, len);
-    Serial.print("[LoRa] Buffer NVS : ");
-    for (int i = 0; i < (int)RADIOLIB_LORAWAN_NONCES_BUF_SIZE; i++)
-      Serial.printf("%02X ", buf[i]);
-    Serial.println();
-    uint16_t devNonce = (uint16_t)buf[8] | ((uint16_t)buf[9] << 8);  // little-endian offset [8]
-    Serial.printf("[LoRa] Nonces NVS restaures — DevNonce : %u (0x%04X)\n", devNonce, devNonce);
-    node.setBufferNonces(buf);
-  } else {
-    Serial.println("[LoRa] Pas de nonces en NVS (premier demarrage) — DevNonce : 0");
-  }
-  _prefs.end();
-}
-
-static void noncesSave()
-{
-  uint8_t* buf = node.getBufferNonces();
-  Serial.print("[LoRa] Buffer sauvegarde : ");
-  for (int i = 0; i < (int)RADIOLIB_LORAWAN_NONCES_BUF_SIZE; i++)
-    Serial.printf("%02X ", buf[i]);
-  Serial.println();
-  uint16_t devNonce = (uint16_t)buf[8] | ((uint16_t)buf[9] << 8);  // little-endian offset [8]
   _prefs.begin("lorawan", false);
-  _prefs.putBytes("nonces", buf, RADIOLIB_LORAWAN_NONCES_BUF_SIZE);
+  uint8_t* nBuf = node.getBufferNonces();
+  _prefs.putBytes("nonces",  nBuf, RADIOLIB_LORAWAN_NONCES_BUF_SIZE);
+  uint8_t* sBuf = node.getBufferSession();
+  _prefs.putBytes("session", sBuf, RADIOLIB_LORAWAN_SESSION_BUF_SIZE);
   _prefs.end();
-  Serial.printf("[LoRa] Nonces sauvegardes en NVS — DevNonce : %u (0x%04X)\n", devNonce, devNonce);
+  Serial.println("[LoRa] Session sauvegardee en NVS");
 }
 
-// Garantit que le DevNonce dans le buffer RadioLib est >= minVal.
-// À appeler après noncesLoad() si le réseau a déjà vu des DevNonces élevés.
-static void noncesEnsureMin(uint16_t minVal)
+static bool sessionRestore()
 {
-  uint8_t* nb = node.getBufferNonces();  // sérialise l'état interne → retourne pointeur
-  uint16_t cur = (uint16_t)nb[8] | ((uint16_t)nb[9] << 8);  // little-endian offset [8]
-  if (cur < minVal) {
-    nb[8] =  minVal       & 0xFF;
-    nb[9] = (minVal >> 8) & 0xFF;
-    node.setBufferNonces(nb);  // ré-injecte le buffer patché
-    Serial.printf("[LoRa] DevNonce ajuste : %u → %u\n", cur, minVal);
+  _prefs.begin("lorawan", true);
+  bool ok = (_prefs.getBytesLength("nonces")  == RADIOLIB_LORAWAN_NONCES_BUF_SIZE) &&
+            (_prefs.getBytesLength("session") == RADIOLIB_LORAWAN_SESSION_BUF_SIZE);
+  if (ok) {
+    uint8_t nBuf[RADIOLIB_LORAWAN_NONCES_BUF_SIZE];
+    uint8_t sBuf[RADIOLIB_LORAWAN_SESSION_BUF_SIZE];
+    _prefs.getBytes("nonces",  nBuf, RADIOLIB_LORAWAN_NONCES_BUF_SIZE);
+    _prefs.getBytes("session", sBuf, RADIOLIB_LORAWAN_SESSION_BUF_SIZE);
+    node.setBufferNonces(nBuf);
+    node.setBufferSession(sBuf);
+    Serial.println("[LoRa] Session NVS chargee");
+  } else {
+    Serial.println("[LoRa] Pas de session en NVS (premier demarrage)");
   }
+  _prefs.end();
+  return ok;
 }
 
 // ── Cayenne LPP — encodage manuel ────────────────────────────────────────────
@@ -237,20 +221,22 @@ void loraInit()
   Serial.println();
 
   node.beginOTAA(joinEUI, devEUI, appKey, appKey);  // LoRaWAN 1.0.x : nwkKey = appKey
-  noncesLoad();             // restaure DevNonce persisté (évite rejet Orange)
-  noncesEnsureMin(13);      // Orange a vu jusqu'à 0x000C (12) — partir au-dessus
+  sessionRestore();  // charge session + nonces NVS si disponibles
 
   { char ts[20] = "--:--:--"; struct tm ti;
     if (getLocalTime(&ti, 0)) strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", &ti);
     Serial.printf("[%s] LoRaWAN OTAA join Orange Live Objects... ", ts); }
   state = node.activateOTAA();
-  noncesSave();  // sauvegarde DevNonce incrémenté (succès ou échec)
-  if (state != RADIOLIB_LORAWAN_NEW_SESSION) {
+  if (state == RADIOLIB_LORAWAN_NEW_SESSION) {
+    Serial.println("joint (nouveau) !");
+    sessionSave();  // sauvegarde pour éviter un nouveau join au prochain boot
+  } else if (state == RADIOLIB_LORAWAN_SESSION_RESTORED) {
+    Serial.println("session restauree (pas de JoinRequest) !");
+  } else {
     Serial.printf("join echoue : %d\n", state);
     return;
   }
   _joined = true;
-  Serial.println("joint !");
 
   // Payload de confirmation post-join : 1 octet à 0x00
   Serial.println("[LoRa] Envoi payload de confirmation post-join...");
@@ -279,13 +265,16 @@ bool loraRetryJoin()
     if (getLocalTime(&ti, 0)) strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", &ti);
     Serial.printf("[%s] [LoRa] Retry join OTAA... ", ts); }
   int16_t state = node.activateOTAA();
-  noncesSave();  // sauvegarde DevNonce incrémenté (succès ou échec)
-  if (state != RADIOLIB_LORAWAN_NEW_SESSION) {
+  if (state == RADIOLIB_LORAWAN_NEW_SESSION) {
+    Serial.println("joint (nouveau) !");
+    sessionSave();
+  } else if (state == RADIOLIB_LORAWAN_SESSION_RESTORED) {
+    Serial.println("session restauree !");
+  } else {
     Serial.printf("echec : %d\n", state);
     return false;
   }
   _joined = true;
-  Serial.println("joint !");
   uint8_t zero = 0x00;
   int16_t confState = node.sendReceive(&zero, 1);
   bool confOk = (confState == RADIOLIB_ERR_NONE || confState == RADIOLIB_LORAWAN_NO_DOWNLINK);
