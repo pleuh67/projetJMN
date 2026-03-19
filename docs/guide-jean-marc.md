@@ -85,7 +85,7 @@ L'interface se met à jour **automatiquement toutes les 5 secondes** sans rechar
 
 ## Transmission LoRa (Orange Live Objects)
 
-La carte envoie automatiquement les mesures **toutes les 15 minutes** via le réseau LoRa Orange.
+La carte envoie automatiquement les mesures **toutes les 5 minutes** via le réseau LoRa Orange.
 Les données sont visibles dans l'interface Orange Live Objects.
 
 ### Paramètres de déclaration du device (Orange Live Objects)
@@ -99,6 +99,64 @@ Les données sont visibles dans l'interface Orange Live Objects.
 | Plan de fréquences | EU868 |
 | AppKey | *voir `secrets.h`* |
 | JoinEUI | *voir `secrets.h`* |
+
+### Processus de connexion au réseau (join OTAA)
+
+La connexion au réseau LoRa fonctionne en **OTAA** (Over The Air Activation) : la carte négocie une session chiffrée avec le réseau Orange avant de pouvoir envoyer des données.
+
+#### Au premier démarrage
+
+```
+[LoRa] Pas de session en NVS (premier demarrage)
+[2026-03-19 15:25:46] LoRaWAN OTAA join Orange Live Objects... joint (nouveau) !
+[LoRa] Session sauvegardee en NVS
+```
+
+1. La carte envoie un **JoinRequest** au réseau Orange (trame radio).
+2. Orange vérifie les credentials (DevEUI, AppKey, JoinEUI) et répond avec un **JoinAccept**.
+3. La carte reçoit le JoinAccept → session établie → **session sauvegardée en mémoire flash**.
+4. Un premier payload de confirmation est envoyé immédiatement.
+
+#### Aux démarrages suivants
+
+```
+[LoRa] Session NVS chargee
+[2026-03-19 15:30:01] LoRaWAN OTAA join Orange Live Objects... session restauree (pas de JoinRequest) !
+```
+
+La session précédente est restaurée depuis la mémoire flash : **aucun JoinRequest radio n'est émis**. La carte est immédiatement opérationnelle.
+
+#### En cas d'échec du join (hors portée au premier démarrage)
+
+```
+[LoRa] Pas de session en NVS (premier demarrage)
+[2026-03-19 15:25:46] LoRaWAN OTAA join Orange Live Objects... join echoue : -1116
+```
+
+La carte continue de fonctionner (serveur web, capteurs) et **retente le join toutes les 5 minutes** automatiquement. Dès qu'elle est en portée d'une antenne Orange, la connexion s'établit.
+
+#### En cas de déconnexion longue (session expirée)
+
+Si la carte est hors portée pendant une longue période, Orange peut invalider la session. La carte le détecte automatiquement après **3 envois consécutifs en échec** :
+
+```
+[LoRa] Erreur envoi : -1 (1/3 echecs consecutifs)
+[LoRa] Erreur envoi : -1 (2/3 echecs consecutifs)
+[LoRa] Erreur envoi : -1 (3/3 echecs consecutifs)
+[LoRa] Seuil echecs atteint — session invalidee, re-join au prochain cycle
+```
+
+La session est effacée et un nouveau JoinRequest est envoyé au cycle suivant.
+
+#### LED et état de connexion
+
+| État | LED |
+|------|-----|
+| Veille normale | Flash court toutes les 2 s |
+| Join en cours / envoi LoRa | LED allumée en continu |
+| Hors portée (join échoue) | Flash toutes les 2 s (fonctionnement normal sinon) |
+
+### Contenu des trames
 
 Chaque trame contient :
 - Température, humidité, pression atmosphérique
@@ -216,4 +274,4 @@ Si les fichiers web sont modifiés, **deux flashages** sont nécessaires dans Pl
 
 ---
 
-*Projet ProjetJMN — XIAO ESP32S3 — mis à jour le 19 mars 2026*
+*Projet ProjetJMN — XIAO ESP32S3 — mis à jour le 19 mars 2026 (v2)*
