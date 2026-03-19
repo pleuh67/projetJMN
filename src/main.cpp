@@ -270,7 +270,9 @@ void setup()
   }
 
   smsInit();
+  digitalWrite(LED_BUILTIN, LOW);   // LED allumée pendant le join
   loraInit();
+  digitalWrite(LED_BUILTIN, HIGH);  // LED éteinte, heartbeat prend le relai
 
   server.on("/",           handleRoot);
   server.on("/style.css",  handleCSS);
@@ -293,7 +295,20 @@ void loop()
   static unsigned long lastAlertCheck = 0;
   static bool          btnLastState   = HIGH;
   static unsigned long btnLastChange  = 0;
+  static unsigned long lastFlash      = 0;
+  static bool          flashOn        = false;
   unsigned long now = millis();
+
+  // ── Heartbeat LED : flash 250 ms toutes les 2 s ───────────────────────────
+  if (!flashOn && now - lastFlash >= 2000UL) {
+    lastFlash = now;
+    flashOn   = true;
+    digitalWrite(LED_BUILTIN, LOW);   // allumée
+  }
+  if (flashOn && now - lastFlash >= 250UL) {
+    flashOn = false;
+    digitalWrite(LED_BUILTIN, HIGH);  // éteinte
+  }
 
   // ── Bouton D0/GPIO1 — envoi compteur sur pression (debounce 50 ms) ──────────
   bool btnState = digitalRead(1);
@@ -302,13 +317,17 @@ void loop()
     btnLastState  = btnState;
     if (btnState == LOW) {   // front descendant = appui
       Serial.println("[BTN] Appui detecte");
+      digitalWrite(LED_BUILTIN, LOW);
       loraSendButtonEvent();
+      digitalWrite(LED_BUILTIN, HIGH);
+      lastFlash = millis();  // évite un flash heartbeat immédiat après
     }
   }
 
   // ── Envoi périodique LoRa (ou retry join si non connecté) ─────────────────
   if (now - lastLoraSend >= LORA_SEND_INTERVAL_MS) {
     lastLoraSend = now;
+    digitalWrite(LED_BUILTIN, LOW);
     if (!loraJoined()) {
       loraRetryJoin();
     } else {
@@ -319,6 +338,8 @@ void loop()
       bool ok = loraSend(temp, hum, pres, lux, -1.0f, -1.0f, db, false);
       Serial.printf("[LoRa] Resultat : %s\n", ok ? "OK" : "ECHEC");
     }
+    digitalWrite(LED_BUILTIN, HIGH);
+    lastFlash = millis();  // évite un flash heartbeat immédiat après
   }
 
   // ── Détection alerte sonore (toutes les 10 s) ─────────────────────────────
