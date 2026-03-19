@@ -38,7 +38,7 @@ static void noncesLoad()
     for (int i = 0; i < (int)RADIOLIB_LORAWAN_NONCES_BUF_SIZE; i++)
       Serial.printf("%02X ", buf[i]);
     Serial.println();
-    uint16_t devNonce = ((uint16_t)buf[2] << 8) | buf[3];  // big-endian RadioLib
+    uint16_t devNonce = (uint16_t)buf[8] | ((uint16_t)buf[9] << 8);  // little-endian offset [8]
     Serial.printf("[LoRa] Nonces NVS restaures — DevNonce : %u (0x%04X)\n", devNonce, devNonce);
     node.setBufferNonces(buf);
   } else {
@@ -54,7 +54,7 @@ static void noncesSave()
   for (int i = 0; i < (int)RADIOLIB_LORAWAN_NONCES_BUF_SIZE; i++)
     Serial.printf("%02X ", buf[i]);
   Serial.println();
-  uint16_t devNonce = ((uint16_t)buf[2] << 8) | buf[3];
+  uint16_t devNonce = (uint16_t)buf[8] | ((uint16_t)buf[9] << 8);  // little-endian offset [8]
   _prefs.begin("lorawan", false);
   _prefs.putBytes("nonces", buf, RADIOLIB_LORAWAN_NONCES_BUF_SIZE);
   _prefs.end();
@@ -66,10 +66,10 @@ static void noncesSave()
 static void noncesEnsureMin(uint16_t minVal)
 {
   uint8_t* nb = node.getBufferNonces();  // sérialise l'état interne → retourne pointeur
-  uint16_t cur = ((uint16_t)nb[2] << 8) | nb[3];
+  uint16_t cur = (uint16_t)nb[8] | ((uint16_t)nb[9] << 8);  // little-endian offset [8]
   if (cur < minVal) {
-    nb[2] = (minVal >> 8) & 0xFF;
-    nb[3] =  minVal       & 0xFF;
+    nb[8] =  minVal       & 0xFF;
+    nb[9] = (minVal >> 8) & 0xFF;
     node.setBufferNonces(nb);  // ré-injecte le buffer patché
     Serial.printf("[LoRa] DevNonce ajuste : %u → %u\n", cur, minVal);
   }
@@ -238,7 +238,7 @@ void loraInit()
 
   node.beginOTAA(joinEUI, devEUI, appKey, appKey);  // LoRaWAN 1.0.x : nwkKey = appKey
   noncesLoad();             // restaure DevNonce persisté (évite rejet Orange)
-  noncesEnsureMin(12);      // Orange a vu jusqu'à 0x000C — garder au-dessus
+  noncesEnsureMin(13);      // Orange a vu jusqu'à 0x000C (12) — partir au-dessus
 
   { char ts[20] = "--:--:--"; struct tm ti;
     if (getLocalTime(&ti, 0)) strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", &ti);
