@@ -7,15 +7,15 @@
 //   -DUSE_HX711     poids  — pins libres requises, prévu pour ESP32S3 Dev Kit
 
 // ── Pins Wio-SX1262 pour XIAO ESP32S3 ────────────────────────────────────────
-#define LORA_NSS    5   // D4 = GPIO5  (NSS/CS) schema 4
-#define LORA_DIO1   2   // D1 = GPIO2  (DIO1/IRQ)
-#define LORA_NRST   3   // D2 = GPIO3  (RESET)
-#define LORA_BUSY   4   // D3 = GPIO4  (BUSY) schema 6
-#define LORA_RF_SW  6   // D5 = GPIO6  (RF-SW antenne) — libéré en déplaçant SCL sur GPIO7  schema 7
+#define LORA_NSS   D3 // 5   // D4 = GPIO5  (NSS/CS) schema 4
+#define LORA_DIO1  D1 //  2   // D1 = GPIO2  (DIO1/IRQ)
+#define LORA_NRST  D0 // 3   // D2 = GPIO3  (RESET)
+#define LORA_BUSY  D2 // 4   // D3 = GPIO4  (BUSY) schema 6
+#define LORA_RF_SW D5 //  6   // D5 = GPIO6  (RF-SW antenne) — libéré en déplaçant SCL sur GPIO7  schema 7
 // SPI : SCK=GPIO9(D9), MISO=GPIO8(D8), MOSI=GPIO10(D10)
-#define LORA_SPI_SCK    7
-#define LORA_SPI_MISO   8
-#define LORA_SPI_MOSI   9
+#define LORA_SPI_SCK    D8 //7
+#define LORA_SPI_MISO   D9 //8
+#define LORA_SPI_MOSI   D10 //9
 
 // ── Paramètres réseau ─────────────────────────────────────────────────────────
 #define LORA_SEND_INTERVAL_MS   (5UL * 60UL * 1000UL)  // envoi périodique : 5 min

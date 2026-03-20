@@ -17,14 +17,6 @@ Repo GitHub : <https://github.com/pleuh67/projetJMN>
 | LED intégrée | Active-bas (LOW = allumée, HIGH = éteinte) |
 | USB CDC | `-DARDUINO_USB_MODE=1 -DARDUINO_USB_CDC_ON_BOOT=1` |
 
-### Capteurs I2C (bus partagé SDA/SCL)
-
-| Capteur | Mesure | Adresse I2C |
-|---------|--------|-------------|
-| BME280 | Température (°C), Humidité (%), Pression (hPa) | 0x76 ou 0x77 |
-| BH1750 | Luminosité (lux) | 0x23 |
-| DS3231 | Horloge temps réel | 0x68 |
-
 ### Module LoRa
 
 | Composant | Détail |
@@ -129,17 +121,13 @@ Câblage suggéré : pont diviseur R1=100kΩ / R2=100kΩ entre VBAT et GND, poin
 | `/` | GET | Interface web | HTML |
 | `/sensors` | GET | Valeurs capteurs | JSON |
 | `/state` | GET | État LED | JSON |
-| `/time` | GET | Date/heure RTC | JSON |
+| `/time` | GET | Date/heure NTP | JSON |
 | `/on` | GET | Allume LED | JSON |
 | `/off` | GET | Éteint LED | JSON |
 
 Exemple `/sensors` :
 ```json
 {
-  "temperature": 22.54,
-  "humidity": 58.20,
-  "pressure": 1013.25,
-  "lux": 320.0,
   "sound_db": 68.3
 }
 ```
@@ -166,21 +154,12 @@ Format nativement décodé par Orange Live Objects (pas de décodeur custom requ
 
 | Canal | Type Cayenne LPP | Donnée | Unité | Résolution |
 |-------|-----------------|--------|-------|------------|
-| 1 | Temperature (0x67) | BME280 | °C | 0.1 |
-| 2 | Humidity (0x68) | BME280 | % | 0.5 |
-| 3 | Barometric Pressure (0x73) | BME280 | hPa | 0.1 |
-| 4 | Illuminance (0x65) | BH1750 | lux | 1 |
 | 5 | Analog Input (0x02) | Tension batterie | V | 0.01 |
 | 6 | Analog Input (0x02) | Poids | kg | 0.01 |
 | 7 | Analog Input (0x02) | Son / 100 | — | 0.01 |
 | 8 | Digital Input (0x00) | Flag alerte | 0/1 | 1 |
 
 Les canaux dont la valeur est indisponible (capteur absent ou désactivé) sont **omis** du payload pour réduire la taille de la trame.
-
-### Horloge
-
-- DS3231 synchronisé via NTP au démarrage (`pool.ntp.org`, fuseau `CET-1CEST`)
-- Fallback sur l'heure NTP directement si DS3231 absent
 
 ---
 
@@ -199,9 +178,6 @@ Les canaux dont la valeur est indisponible (capteur absent ou désactivé) sont 
 
 | Bibliothèque | Source | Rôle |
 |---|---|---|
-| Adafruit BME280 Library | adafruit/Adafruit BME280 Library | BME280 |
-| BH1750 | claws/BH1750 | BH1750 |
-| RTClib | adafruit/RTClib | DS3231 |
 | RadioLib | jgromes/RadioLib@^6.6.0 | SX1262 / LoRaWAN |
 | HX711 | bogde/HX711 *(commenté)* | Cellule de charge |
 | WebServer | Espressif Arduino (natif) | Serveur HTTP |

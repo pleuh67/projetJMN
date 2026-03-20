@@ -201,6 +201,7 @@ void loraInit()
   Serial.printf("SX1262 pins — NSS:%d DIO1:%d NRST:%d BUSY:%d SPI(SCK:%d MISO:%d MOSI:%d)\n",
                 LORA_NSS, LORA_DIO1, LORA_NRST, LORA_BUSY,
                 LORA_SPI_SCK, LORA_SPI_MISO, LORA_SPI_MOSI);
+
   // RF-SW : commutateur antenne Wio-SX1262 (actif haut en TX, bas en RX)
   radio.setRfSwitchPins(RADIOLIB_NC, LORA_RF_SW);
 
@@ -253,8 +254,9 @@ void loraInit()
   } else if (state == RADIOLIB_LORAWAN_SESSION_RESTORED) {
     Serial.println("session restauree (pas de JoinRequest) !");
   } else {
-    Serial.printf("join echoue : %d\n", state);
-    return;
+    // JoinAccept peut avoir été émis par Orange mais mal reçu radio.
+    // On tente quand même un envoi : s'il passe, la session existe côté réseau.
+    Serial.printf("join echoue (%d) — envoi test pour verifier session Orange...\n", state);
   }
   _joined = true;
 
@@ -264,6 +266,10 @@ void loraInit()
   int16_t confState = node.sendReceive(&zero, 1);
   bool confOk = (confState == RADIOLIB_ERR_NONE || confState == RADIOLIB_LORAWAN_NO_DOWNLINK);
   Serial.printf("[LoRa] Confirmation : %s\n", confOk ? "OK" : "ECHEC");
+  if (confOk && (state != RADIOLIB_LORAWAN_NEW_SESSION && state != RADIOLIB_LORAWAN_SESSION_RESTORED)) {
+    Serial.println("[LoRa] Session Orange confirmee par envoi — sauvegarde NVS");
+    sessionSave();
+  }
 
 #ifdef USE_HX711
   #if defined(HX711_DOUT_PIN) && defined(HX711_SCK_PIN)
@@ -291,14 +297,21 @@ bool loraRetryJoin()
   } else if (state == RADIOLIB_LORAWAN_SESSION_RESTORED) {
     Serial.println("session restauree !");
   } else {
-    Serial.printf("echec : %d\n", state);
-    return false;
+    Serial.printf("echec (%d) — envoi test pour verifier session Orange...\n", state);
   }
   _joined = true;
   uint8_t zero = 0x00;
   int16_t confState = node.sendReceive(&zero, 1);
   bool confOk = (confState == RADIOLIB_ERR_NONE || confState == RADIOLIB_LORAWAN_NO_DOWNLINK);
   Serial.printf("[LoRa] Confirmation : %s\n", confOk ? "OK" : "ECHEC");
+  if (confOk && (state != RADIOLIB_LORAWAN_NEW_SESSION && state != RADIOLIB_LORAWAN_SESSION_RESTORED)) {
+    Serial.println("[LoRa] Session Orange confirmee par envoi — sauvegarde NVS");
+    sessionSave();
+  }
+  if (!confOk) {
+    _joined = false;  // envoi échoué aussi → pas de session utilisable
+    return false;
+  }
   return true;
 }
 

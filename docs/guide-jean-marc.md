@@ -6,7 +6,7 @@ La carte **XIAO ESP32S3** héberge un petit serveur web accessible depuis n'impo
 Elle permet de :
 
 - **Allumer / éteindre** la LED intégrée
-- **Consulter en temps réel** la température, l'humidité, la pression atmosphérique et la luminosité
+- **Consulter en temps réel** le niveau sonore (si microphone connecté)
 - **Recevoir une alerte SMS** lorsqu'un seuil est dépassé
 - **Transmettre les mesures par LoRa** vers le réseau Orange, toutes les 5 minutes
 
@@ -16,9 +16,6 @@ Elle permet de :
 
 | Capteur | Ce qu'il mesure | Protocole |
 |---------|-----------------|-----------|
-| BME280 | Température (°C), Humidité (%), Pression (hPa) | I2C |
-| BH1750 | Luminosité (lux) | I2C |
-| DS3231 | Horloge temps réel (date et heure) | I2C |
 | Wio-SX1262 | Module LoRa (émission vers réseau Orange) | SPI |
 
 > **Capteurs en préparation** (seront activés sur la prochaine carte) :
@@ -26,24 +23,6 @@ Elle permet de :
 > - Cellule de charge HX711 — poids en kg
 
 ---
-
-## Câblage I2C (XIAO ESP32S3)
-
-```
-XIAO ESP32S3        BME280 / BH1750 / DS3231
-────────────        ──────────────────────────
-3.3V           →    VCC
-GND            →    GND
-GPIO 5 (SDA)   →    SDA
-GPIO 6 (SCL)   →    SCL
-```
-
-> Les capteurs I2C partagent le même bus (même 4 fils), ils se branchent en parallèle.
-
-**Adresses I2C :**
-- BME280 : `0x76` (SDO → GND) ou `0x77` (SDO → 3.3V)
-- BH1750 : `0x23` (ADDR → GND)
-- DS3231 : `0x68` (fixe)
 
 ---
 
@@ -70,13 +49,9 @@ L'interface se met à jour **automatiquement toutes les 5 secondes** sans rechar
 │  [Allumer]  [Eteindre]      │
 │                             │
 │          CAPTEURS           │
-│  ┌──────────┬────────────┐  │
-│  │  22.5 °C │   58.2 %   │  │
-│  │  Temp.   │  Humidité  │  │
-│  ├──────────┼────────────┤  │
-│  │ 1013 hPa │  320 lux   │  │
-│  │ Pression │ Luminosité │  │
-│  └──────────┴────────────┘  │
+│  ┌──────────────────────┐   │
+│  │  Son : 68.3 dB       │   │
+│  └──────────────────────┘   │
 │  Mis à jour : 14:32:01      │
 └─────────────────────────────┘
 ```
@@ -85,7 +60,7 @@ L'interface se met à jour **automatiquement toutes les 5 secondes** sans rechar
 
 ## Transmission LoRa (Orange Live Objects)
 
-La carte envoie automatiquement les mesures **toutes les 5 minutes** via le réseau LoRa Orange.
+La carte envoie automatiquement les données **toutes les 5 minutes** via le réseau LoRa Orange.
 Les données sont visibles dans l'interface Orange Live Objects.
 
 ### Paramètres de déclaration du device (Orange Live Objects)
@@ -159,8 +134,6 @@ La session est effacée et un nouveau JoinRequest est envoyé au cycle suivant.
 ### Contenu des trames
 
 Chaque trame contient :
-- Température, humidité, pression atmosphérique
-- Luminosité
 - Tension batterie *(si câblée)*
 - Poids *(quand le capteur sera connecté)*
 - Niveau sonore *(quand le microphone sera connecté)*
@@ -189,11 +162,7 @@ GET http://<adresse-ip>/sensors
 Exemple de réponse :
 ```json
 {
-  "temperature": 22.54,
-  "humidity": 58.20,
-  "pressure": 1013.25,
-  "lux": 320.0,
-  "sound_db": null
+  "sound_db": 68.3
 }
 ```
 
@@ -230,14 +199,28 @@ Exemple de réponse :
 | Valeurs `--` sur les capteurs | Capteur non détecté | Vérifier le câblage SDA/SCL et l'alimentation |
 | Impossible d'accéder à l'IP | Wi-Fi non connecté | Vérifier SSID/mot de passe dans `secrets.h`, surveiller le moniteur série |
 | LED ne réagit pas | Logique inversée | La LED intégrée est active-bas (LOW = allumée) |
-| BME280 non détecté | Mauvaise adresse I2C | Relier SDO à 3.3V pour passer en adresse `0x77` |
 | SMS non reçu | Anti-spam actif | Attendre 5 min entre deux envois ; vérifier les logs `[SMS]` dans le moniteur série |
-| LoRa : join échoué | Credentials LoRaWAN incorrects | Vérifier `LORAWAN_JOIN_EUI`, `LORAWAN_DEV_EUI`, `LORAWAN_APP_KEY` dans `secrets.h` |
-| LoRa : trame non reçue | Couverture réseau | Vérifier la couverture Orange LoRa sur le site, ou rapprocher d'une fenêtre |
+| LoRa : join échoué `-1116` | Device non déclaré ou credentials incorrects | Vérifier `LORAWAN_JOIN_EUI` et `LORAWAN_APPKEY_PREFIX` dans `secrets.h` ; recréer le device sur Orange Live Objects |
+| LoRa : join échoué en boucle | Hors portée d'une gateway Orange | Rapprocher d'une fenêtre ou vérifier la couverture sur le site Orange |
+| LoRa : session expirée après longue absence | Orange invalide les sessions inactives | La carte détecte automatiquement 3 échecs consécutifs et refait un join |
+| LoRa : trame non reçue sur Orange | Compteur de trames désynchronisé | Recréer le device sur Orange Live Objects pour réinitialiser les compteurs |
 
 ---
 
-## Architecture des fichiers web (SPIFFS)
+## Architecture du projet
+
+### Fichiers source (firmware)
+
+| Fichier | Rôle |
+|---------|------|
+| `src/main.cpp` | Démarrage, WiFi, NTP, orchestration générale, boucle principale |
+| `src/mesures.cpp` | Capteur INMP441 (son), niveau sonore en dB |
+| `src/web.cpp` | Serveur HTTP, routes, handlers JSON, SPIFFS |
+| `src/lora_lorawan.cpp` | Module LoRa SX1262, join OTAA, envoi Cayenne LPP, persistance session |
+| `src/sms_ovh.cpp` | Alertes SMS via API OVH |
+| `include/secrets.h` | Credentials WiFi, OVH, LoRaWAN (**gitignorée — ne pas partager**) |
+
+### Fichiers web (interface SPIFFS)
 
 Les fichiers de l'interface sont stockés dans la **mémoire flash SPIFFS** de la carte, dans le dossier `data/` du projet :
 
@@ -255,7 +238,7 @@ Les fichiers de l'interface sont stockés dans la **mémoire flash SPIFFS** de l
 Si les fichiers web sont modifiés, **deux flashages** sont nécessaires dans PlatformIO, dans cet ordre :
 
 1. **Upload Filesystem Image** → charge `data/` dans SPIFFS
-2. **Upload** → charge le firmware (`main.cpp`)
+2. **Upload** → charge le firmware
 
 ---
 
@@ -263,9 +246,6 @@ Si les fichiers web sont modifiés, **deux flashages** sont nécessaires dans Pl
 
 | Bibliothèque | Auteur | Rôle |
 |---|---|---|
-| Adafruit BME280 Library | Adafruit | Lecture température / humidité / pression |
-| BH1750 | claws | Lecture luminosité |
-| RTClib | Adafruit | Horloge temps réel DS3231 |
 | RadioLib | jgromes | Module LoRa SX1262 / LoRaWAN |
 | WebServer | Espressif (Arduino) | Serveur HTTP intégré |
 | SPIFFS | Espressif (Arduino) | Système de fichiers flash |
@@ -274,4 +254,4 @@ Si les fichiers web sont modifiés, **deux flashages** sont nécessaires dans Pl
 
 ---
 
-*Projet ProjetJMN — XIAO ESP32S3 — mis à jour le 19 mars 2026 (v2)*
+*Projet ProjetJMN — XIAO ESP32S3 — mis à jour le 19 mars 2026 (v3)*
