@@ -27,11 +27,11 @@ void setup()
 {
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(1, INPUT_PULLUP);  // bouton sur D0/GPIO1, actif bas
-  for (unsigned long t = millis(); millis() - t < 10000;) {
-    digitalWrite(LED_BUILTIN, LOW);   // allumée (active-bas)
+  for (int i = 0; i < 10; i++) {
+    digitalWrite(LED_BUILTIN, LOW);   // flash 250 ms
     delay(250);
-    digitalWrite(LED_BUILTIN, HIGH);  // éteinte
-    delay(250);
+    digitalWrite(LED_BUILTIN, HIGH);  // éteinte 750 ms
+    delay(750);
   }
   digitalWrite(LED_BUILTIN, LOW);   // allumée pendant le démarrage
   Serial.begin(115200);

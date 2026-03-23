@@ -202,11 +202,8 @@ void loraInit()
                 LORA_NSS, LORA_DIO1, LORA_NRST, LORA_BUSY,
                 LORA_SPI_SCK, LORA_SPI_MISO, LORA_SPI_MOSI);
 
-  // RF-SW : commutateur antenne Wio-SX1262 (actif haut en TX, bas en RX)
-  radio.setRfSwitchPins(RADIOLIB_NC, LORA_RF_SW);
-
-  // Re-init SPI hardware après avoir trouvé les bons pins
-  SPI.begin(LORA_SPI_SCK, LORA_SPI_MISO, LORA_SPI_MOSI, LORA_NSS);
+  // RF-SW : RXEN actif HIGH (HIGH=RX, LOW=TX) — pin en position rxEn pour que RadioLib la mette LOW en TX
+  radio.setRfSwitchPins(LORA_RF_SW, RADIOLIB_NC);
 
   Serial.print("SX1262 init... ");
   int16_t state = radio.begin();
@@ -242,7 +239,14 @@ void loraInit()
   Serial.println();
 
   node.beginOTAA(joinEUI, devEUI, appKey, appKey);  // LoRaWAN 1.0.x : nwkKey = appKey
-  sessionRestore();  // charge session + nonces NVS si disponibles
+  if (!sessionRestore()) {
+    // NVS vide : pré-initialiser DevNonce > dernier connu par Orange (offset [8], little-endian)
+    uint8_t* nBuf = node.getBufferNonces();
+    uint16_t startNonce = 10;
+    nBuf[8] = startNonce & 0xFF;
+    nBuf[9] = (startNonce >> 8) & 0xFF;
+    Serial.printf("[LoRa] DevNonce initialise a %u\n", startNonce);
+  }
 
   { char ts[20] = "--:--:--"; struct tm ti;
     if (getLocalTime(&ti, 0)) strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", &ti);
@@ -250,25 +254,14 @@ void loraInit()
   state = node.activateOTAA();
   if (state == RADIOLIB_LORAWAN_NEW_SESSION) {
     Serial.println("joint (nouveau) !");
-    sessionSave();  // sauvegarde pour éviter un nouveau join au prochain boot
+    _joined = true;
+    sessionSave();
   } else if (state == RADIOLIB_LORAWAN_SESSION_RESTORED) {
     Serial.println("session restauree (pas de JoinRequest) !");
+    _joined = true;
   } else {
-    // JoinAccept peut avoir été émis par Orange mais mal reçu radio.
-    // On tente quand même un envoi : s'il passe, la session existe côté réseau.
-    Serial.printf("join echoue (%d) — envoi test pour verifier session Orange...\n", state);
-  }
-  _joined = true;
-
-  // Payload de confirmation post-join : 1 octet à 0x00
-  Serial.println("[LoRa] Envoi payload de confirmation post-join...");
-  uint8_t zero = 0x00;
-  int16_t confState = node.sendReceive(&zero, 1);
-  bool confOk = (confState == RADIOLIB_ERR_NONE || confState == RADIOLIB_LORAWAN_NO_DOWNLINK);
-  Serial.printf("[LoRa] Confirmation : %s\n", confOk ? "OK" : "ECHEC");
-  if (confOk && (state != RADIOLIB_LORAWAN_NEW_SESSION && state != RADIOLIB_LORAWAN_SESSION_RESTORED)) {
-    Serial.println("[LoRa] Session Orange confirmee par envoi — sauvegarde NVS");
-    sessionSave();
+    Serial.printf("join echoue (%d) — retry au prochain cycle\n", state);
+    return;  // pas de session : inutile d'envoyer
   }
 
 #ifdef USE_HX711
@@ -293,23 +286,13 @@ bool loraRetryJoin()
   int16_t state = node.activateOTAA();
   if (state == RADIOLIB_LORAWAN_NEW_SESSION) {
     Serial.println("joint (nouveau) !");
+    _joined = true;
     sessionSave();
   } else if (state == RADIOLIB_LORAWAN_SESSION_RESTORED) {
     Serial.println("session restauree !");
+    _joined = true;
   } else {
-    Serial.printf("echec (%d) — envoi test pour verifier session Orange...\n", state);
-  }
-  _joined = true;
-  uint8_t zero = 0x00;
-  int16_t confState = node.sendReceive(&zero, 1);
-  bool confOk = (confState == RADIOLIB_ERR_NONE || confState == RADIOLIB_LORAWAN_NO_DOWNLINK);
-  Serial.printf("[LoRa] Confirmation : %s\n", confOk ? "OK" : "ECHEC");
-  if (confOk && (state != RADIOLIB_LORAWAN_NEW_SESSION && state != RADIOLIB_LORAWAN_SESSION_RESTORED)) {
-    Serial.println("[LoRa] Session Orange confirmee par envoi — sauvegarde NVS");
-    sessionSave();
-  }
-  if (!confOk) {
-    _joined = false;  // envoi échoué aussi → pas de session utilisable
+    Serial.printf("echec (%d)\n", state);
     return false;
   }
   return true;
